@@ -217,9 +217,8 @@
     <h2>Connect to BidPath</h2>
     <p class="sub">Credentials are stored in this browser session and cleared when you close the tab. Check "Remember" to save them in localStorage for future visits.</p>
     <div class="setup-row">
-      <input type="password" id="f-key"  placeholder="X-Integration-Key" autocomplete="off" style="max-width:270px;" />
-      <input type="email"    id="f-user" placeholder="BidPath login email" autocomplete="off" style="max-width:230px;" />
-      <input type="password" id="f-pass" placeholder="Password" autocomplete="new-password" style="max-width:180px;" />
+      <input type="email"    id="f-user" placeholder="BidPath login email" autocomplete="off" style="max-width:280px;" />
+      <input type="password" id="f-pass" placeholder="Password" autocomplete="new-password" style="max-width:200px;" />
       <button class="btn-primary" onclick="connect()" id="btn-connect">Connect</button>
     </div>
     <div class="save-creds-row">
@@ -295,7 +294,7 @@
 
 <script>
   const API = 'https://bid.birdsnestauctions.com/api/graphql';
-  let IKEY = '';          // X-Integration-Key (always sent)
+  let IKEY = 'b619606be303fbcbcb5a2e394c9ba6a0d3ee8f39d2fe1375900f130933367605';
   let BEARER = '';        // accessToken from createToken
   let allAuctions = [];
 
@@ -305,7 +304,7 @@
     if (saved) {
       try {
         const c = JSON.parse(saved);
-        document.getElementById('f-key').value  = c.key  || '';
+        
         document.getElementById('f-user').value = c.user || '';
         document.getElementById('f-pass').value = c.pass || '';
         document.getElementById('chk-save').checked = true;
@@ -324,10 +323,10 @@
 
   // ── Auth ───────────────────────────────────────────────
   async function connect() {
-    const key  = document.getElementById('f-key').value.trim();
+    
     const user = document.getElementById('f-user').value.trim();
     const pass = document.getElementById('f-pass').value;
-    if (!key || !user || !pass) { setNote('Please fill in all three fields.', 'err'); return; }
+    if (!user || !pass) { setNote('Please fill in all three fields.', 'err'); return; }
 
     setNote('Connecting…', '');
     document.getElementById('btn-connect').disabled = true;
@@ -349,7 +348,7 @@
       sessionStorage.setItem('bna_ikey', key);
 
       if (document.getElementById('chk-save').checked) {
-        localStorage.setItem('bna_creds', JSON.stringify({ key, user, pass }));
+        localStorage.setItem('bna_creds', JSON.stringify({ user, pass }));
       } else {
         localStorage.removeItem('bna_creds');
       }
@@ -648,7 +647,7 @@
   }
 
   // ── Keyboard shortcuts ─────────────────────────────────
-  ['f-key','f-user','f-pass'].forEach(id => {
+  ['f-user','f-pass'].forEach(id => {
     document.getElementById(id).addEventListener('keydown', e => { if (e.key==='Enter') connect(); });
   });
   document.getElementById('cust-query').addEventListener('keydown', e => { if (e.key==='Enter') searchCustomer(); });
