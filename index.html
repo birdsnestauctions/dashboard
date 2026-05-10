@@ -1,0 +1,657 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>BNA Staff Dashboard</title>
+  <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@400;500;600&family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;1,9..40,300&display=swap" rel="stylesheet" />
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --teal:       #2D6B5E;
+      --teal-mid:   #3a8272;
+      --teal-light: #4fa090;
+      --teal-pale:  #eef4f2;
+      --teal-pale2: #d8ebe7;
+      --teal-dark:  #1d4a41;
+      --cream:      #f9f6f1;
+      --white:      #ffffff;
+      --ink:        #1a2b28;
+      --ink-mid:    #3d5450;
+      --ink-light:  #7a9890;
+      --border:     #d0e2de;
+      --shadow-sm:  0 1px 4px rgba(29,74,65,0.08);
+      --shadow-md:  0 4px 20px rgba(29,74,65,0.10);
+      --radius:     10px;
+      --radius-sm:  6px;
+
+      --status-open-c:     #7a5c00; --status-open-bg:  #fef8e7;
+      --status-paid-c:     #2d7d4a; --status-paid-bg:  #eaf4ee;
+      --status-pending-c:  #7a5c00; --status-pending-bg:#fdf3d0;
+      --status-shipped-c:  #1a6b9a; --status-shipped-bg:#e5f2fa;
+      --status-canceled-c: #8a4040; --status-canceled-bg:#faeaea;
+    }
+
+    html { font-size: 15px; }
+    body { font-family: 'DM Sans', sans-serif; background: var(--cream); color: var(--ink); min-height: 100vh; line-height: 1.5; }
+
+    /* ── Header ── */
+    header {
+      background: var(--teal-dark); color: var(--white);
+      padding: 0 32px; display: flex; align-items: center;
+      justify-content: space-between; height: 60px;
+      position: sticky; top: 0; z-index: 100;
+      box-shadow: 0 2px 12px rgba(0,0,0,0.18);
+    }
+    .header-brand { display: flex; align-items: baseline; gap: 10px; }
+    .header-brand h1 { font-family: 'Cormorant Garamond', serif; font-size: 1.4rem; font-weight: 600; color: var(--white); }
+    .header-brand span { font-size: 0.72rem; font-weight: 300; letter-spacing: 0.12em; text-transform: uppercase; color: rgba(255,255,255,0.5); }
+    .header-actions { display: flex; align-items: center; gap: 12px; }
+    .btn-icon {
+      background: rgba(255,255,255,0.10); border: 1px solid rgba(255,255,255,0.18);
+      color: var(--white); border-radius: var(--radius-sm); padding: 6px 14px;
+      font-family: 'DM Sans', sans-serif; font-size: 0.78rem; cursor: pointer;
+      display: flex; align-items: center; gap: 6px; transition: background 0.15s;
+    }
+    .btn-icon:hover { background: rgba(255,255,255,0.2); }
+    .conn-dot { width: 7px; height: 7px; border-radius: 50%; background: rgba(255,255,255,0.25); transition: background 0.3s; }
+    .conn-dot.ok  { background: #6fcf97; }
+    .conn-dot.err { background: #eb5757; }
+
+    /* ── Main ── */
+    main { max-width: 1240px; margin: 0 auto; padding: 28px 24px 64px; }
+
+    /* ── Setup Panel ── */
+    #setup-panel {
+      background: var(--white); border: 1px solid var(--border);
+      border-radius: var(--radius); padding: 24px 28px; margin-bottom: 28px;
+      box-shadow: var(--shadow-sm);
+    }
+    #setup-panel h2 { font-family: 'Cormorant Garamond', serif; font-size: 1.15rem; font-weight: 600; color: var(--teal-dark); margin-bottom: 3px; }
+    #setup-panel p.sub { font-size: 0.8rem; color: var(--ink-light); margin-bottom: 16px; }
+    .setup-row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+    .setup-row input {
+      flex: 1; min-width: 180px; padding: 9px 13px;
+      border: 1px solid var(--border); border-radius: var(--radius-sm);
+      font-family: 'DM Sans', sans-serif; font-size: 0.85rem; color: var(--ink);
+      background: var(--cream); outline: none; transition: border-color 0.15s, box-shadow 0.15s;
+    }
+    .setup-row input:focus { border-color: var(--teal); box-shadow: 0 0 0 3px rgba(45,107,94,0.12); }
+    .setup-row input::placeholder { color: var(--ink-light); }
+    #setup-note { font-size: 0.78rem; margin-top: 10px; color: var(--ink-light); }
+    #setup-note.err { color: #c0392b; }
+    #setup-note.ok  { color: var(--status-paid-c); }
+    .save-creds-row { margin-top: 10px; display: flex; align-items: center; gap: 8px; font-size: 0.78rem; color: var(--ink-light); }
+    .save-creds-row input[type=checkbox] { accent-color: var(--teal); cursor: pointer; }
+
+    /* ── Buttons ── */
+    .btn-primary {
+      background: var(--teal); color: var(--white); border: none;
+      border-radius: var(--radius-sm); padding: 9px 20px;
+      font-family: 'DM Sans', sans-serif; font-size: 0.85rem; font-weight: 500;
+      cursor: pointer; letter-spacing: 0.02em; transition: background 0.15s, transform 0.1s; white-space: nowrap;
+    }
+    .btn-primary:hover  { background: var(--teal-mid); }
+    .btn-primary:active { transform: scale(0.98); }
+    .btn-primary:disabled { opacity: 0.45; cursor: not-allowed; }
+    .btn-ghost {
+      background: none; border: 1px solid var(--border); border-radius: var(--radius-sm);
+      padding: 6px 13px; font-size: 0.78rem; font-family: 'DM Sans', sans-serif;
+      color: var(--ink-mid); cursor: pointer; display: flex; align-items: center;
+      gap: 5px; transition: border-color 0.15s, color 0.15s;
+    }
+    .btn-ghost:hover { border-color: var(--teal); color: var(--teal); }
+
+    /* ── Section ── */
+    .section-row { display: flex; align-items: baseline; justify-content: space-between; margin-bottom: 16px; gap: 12px; }
+    .section-title { font-family: 'Cormorant Garamond', serif; font-size: 1.25rem; font-weight: 600; color: var(--teal-dark); }
+    .section-meta  { font-size: 0.76rem; color: var(--ink-light); }
+
+    /* ── Auction Cards ── */
+    #auctions-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 16px; margin-bottom: 40px; }
+    .auction-card { background: var(--white); border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; box-shadow: var(--shadow-sm); transition: box-shadow 0.2s, transform 0.2s; }
+    .auction-card:hover { box-shadow: var(--shadow-md); transform: translateY(-2px); }
+    .card-bar { height: 4px; background: linear-gradient(90deg, var(--teal) 0%, var(--teal-light) 100%); }
+    .card-body { padding: 18px 20px 20px; }
+    .card-name { font-family: 'Cormorant Garamond', serif; font-size: 1.05rem; font-weight: 600; color: var(--ink); line-height: 1.3; margin-bottom: 3px; }
+    .card-sale { font-size: 0.72rem; color: var(--ink-light); text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 16px; }
+    .card-stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1px; background: var(--border); border: 1px solid var(--border); border-radius: var(--radius-sm); overflow: hidden; }
+    .card-stat { background: var(--white); padding: 12px 8px; text-align: center; }
+    .stat-val { font-family: 'Cormorant Garamond', serif; font-size: 1.4rem; font-weight: 600; color: var(--teal-dark); line-height: 1; margin-bottom: 3px; }
+    .stat-lbl { font-size: 0.65rem; font-weight: 400; color: var(--ink-light); text-transform: uppercase; letter-spacing: 0.08em; }
+
+    /* ── Skeleton ── */
+    .skel { background: linear-gradient(90deg, var(--teal-pale) 25%, var(--teal-pale2) 50%, var(--teal-pale) 75%); background-size: 200% 100%; animation: shimmer 1.4s infinite; border-radius: 4px; display: inline-block; }
+    @keyframes shimmer { to { background-position: -200% 0; } }
+
+    /* ── Empty / Error ── */
+    .empty { background: var(--white); border: 1px dashed var(--border); border-radius: var(--radius); padding: 40px 24px; text-align: center; color: var(--ink-light); font-size: 0.88rem; }
+    .empty-icon { font-size: 1.8rem; margin-bottom: 10px; opacity: 0.45; }
+    .err-box { background: #faeaea; border: 1px solid #f0c0c0; border-radius: var(--radius-sm); padding: 14px 18px; color: #c0392b; font-size: 0.83rem; }
+
+    /* ── Invoice Search ── */
+    #invoice-search { background: var(--white); border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; box-shadow: var(--shadow-sm); }
+    .tabs { display: flex; border-bottom: 1px solid var(--border); background: var(--teal-pale); }
+    .tab { padding: 12px 24px; font-size: 0.82rem; font-weight: 500; color: var(--ink-mid); cursor: pointer; border-bottom: 2px solid transparent; transition: color 0.15s, background 0.15s, border-color 0.15s; user-select: none; }
+    .tab:hover { color: var(--teal); background: rgba(255,255,255,0.4); }
+    .tab.active { color: var(--teal-dark); border-bottom-color: var(--teal); background: var(--white); }
+    .panel { padding: 22px 24px 24px; display: none; }
+    .panel.active { display: block; }
+
+    .search-row { display: flex; gap: 10px; align-items: flex-end; flex-wrap: wrap; }
+    .fld { display: flex; flex-direction: column; gap: 5px; flex: 1; min-width: 180px; }
+    .fld label { font-size: 0.7rem; font-weight: 500; color: var(--ink-mid); text-transform: uppercase; letter-spacing: 0.08em; }
+    .fld select, .fld input {
+      padding: 9px 12px; border: 1px solid var(--border); border-radius: var(--radius-sm);
+      font-family: 'DM Sans', sans-serif; font-size: 0.85rem; color: var(--ink);
+      background: var(--cream); outline: none; transition: border-color 0.15s, box-shadow 0.15s;
+    }
+    .fld select:focus, .fld input:focus { border-color: var(--teal); box-shadow: 0 0 0 3px rgba(45,107,94,0.12); }
+    .search-hint { margin-top: 9px; font-size: 0.75rem; color: var(--ink-light); font-style: italic; }
+
+    /* ── Results ── */
+    .results-area { margin-top: 20px; border-top: 1px solid var(--border); padding-top: 20px; }
+    .results-hdr { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; flex-wrap: wrap; gap: 8px; }
+    .results-count { font-size: 0.78rem; color: var(--ink-light); }
+    .chip { background: var(--teal-pale); border: 1px solid var(--teal-pale2); border-radius: 20px; padding: 3px 12px; font-size: 0.78rem; color: var(--teal-dark); font-weight: 500; }
+    .chip.red { color: #c0392b; border-color: #f0c0c0; background: #faeaea; }
+
+    .tbl-wrap { overflow-x: auto; border: 1px solid var(--border); border-radius: var(--radius-sm); }
+    table { width: 100%; border-collapse: collapse; font-size: 0.83rem; }
+    thead tr { background: var(--teal-pale); border-bottom: 1px solid var(--border); }
+    thead th { padding: 9px 14px; text-align: left; font-size: 0.68rem; font-weight: 500; color: var(--ink-mid); text-transform: uppercase; letter-spacing: 0.08em; white-space: nowrap; }
+    tbody tr { border-bottom: 1px solid var(--border); transition: background 0.1s; }
+    tbody tr:last-child { border-bottom: none; }
+    tbody tr:hover { background: var(--teal-pale); }
+    tbody td { padding: 10px 14px; vertical-align: middle; }
+    .td-inv  { font-weight: 500; color: var(--teal-dark); }
+    .td-name { font-weight: 400; }
+    .td-sub  { font-size: 0.74rem; color: var(--ink-light); }
+    .td-date { font-size: 0.76rem; color: var(--ink-light); white-space: nowrap; }
+    .td-amt  { font-family: 'Cormorant Garamond', serif; font-size: 1rem; font-weight: 600; text-align: right; }
+    .td-bal  { text-align: right; color: var(--ink-mid); font-size: 0.85rem; }
+    .td-bal.zero { color: var(--status-paid-c); }
+
+    .badge { display: inline-block; padding: 2px 9px; border-radius: 10px; font-size: 0.68rem; font-weight: 500; letter-spacing: 0.05em; text-transform: uppercase; }
+    .b-OPEN     { color: var(--status-open-c);     background: var(--status-open-bg); }
+    .b-PAID     { color: var(--status-paid-c);     background: var(--status-paid-bg); }
+    .b-PENDING  { color: var(--status-pending-c);  background: var(--status-pending-bg); }
+    .b-SHIPPED  { color: var(--status-shipped-c);  background: var(--status-shipped-bg); }
+    .b-CANCELED { color: var(--status-canceled-c); background: var(--status-canceled-bg); }
+
+    /* ── User match list ── */
+    #user-results { margin-top: 14px; display: none; }
+    .user-list { display: flex; flex-direction: column; gap: 7px; margin-bottom: 16px; }
+    .user-item { display: flex; align-items: center; justify-content: space-between; padding: 10px 14px; background: var(--cream); border: 1px solid var(--border); border-radius: var(--radius-sm); cursor: pointer; transition: background 0.12s, border-color 0.12s; gap: 12px; }
+    .user-item:hover, .user-item.sel { background: var(--teal-pale); border-color: var(--teal); }
+    .user-name  { font-weight: 500; font-size: 0.85rem; }
+    .user-email { font-size: 0.74rem; color: var(--ink-light); }
+    .user-cta   { font-size: 0.72rem; color: var(--teal); font-weight: 500; white-space: nowrap; }
+
+    /* ── Spinner / loading ── */
+    .spinner { display: inline-block; width: 15px; height: 15px; border: 2px solid var(--teal-pale2); border-top-color: var(--teal); border-radius: 50%; animation: spin 0.7s linear infinite; vertical-align: middle; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .loading { text-align: center; padding: 28px; color: var(--ink-light); font-size: 0.85rem; }
+
+    @media (max-width: 600px) { main { padding: 16px 12px 48px; } header { padding: 0 14px; } }
+  </style>
+</head>
+<body>
+
+<header>
+  <div class="header-brand">
+    <h1>Bird's Nest Auctions</h1>
+    <span>Staff Dashboard</span>
+  </div>
+  <div class="header-actions">
+    <div class="conn-dot" id="conn-dot"></div>
+    <button class="btn-icon" onclick="toggleSetup()">⚙ Settings</button>
+  </div>
+</header>
+
+<main>
+
+  <!-- Setup -->
+  <div id="setup-panel">
+    <h2>Connect to BidPath</h2>
+    <p class="sub">Credentials are stored in this browser session and cleared when you close the tab. Check "Remember" to save them in localStorage for future visits.</p>
+    <div class="setup-row">
+      <input type="password" id="f-key"  placeholder="X-Integration-Key" autocomplete="off" style="max-width:270px;" />
+      <input type="email"    id="f-user" placeholder="BidPath login email" autocomplete="off" style="max-width:230px;" />
+      <input type="password" id="f-pass" placeholder="Password" autocomplete="new-password" style="max-width:180px;" />
+      <button class="btn-primary" onclick="connect()" id="btn-connect">Connect</button>
+    </div>
+    <div class="save-creds-row">
+      <input type="checkbox" id="chk-save" />
+      <label for="chk-save">Remember credentials in this browser</label>
+    </div>
+    <p id="setup-note"></p>
+  </div>
+
+  <!-- Active Auctions -->
+  <div class="section-row">
+    <span class="section-title">Active Auctions</span>
+    <div style="display:flex;align-items:center;gap:12px;">
+      <span class="section-meta" id="auctions-ts"></span>
+      <button class="btn-ghost" id="btn-refresh" onclick="loadAuctions()" disabled>↻ Refresh</button>
+    </div>
+  </div>
+
+  <div id="auctions-grid">
+    <div class="empty"><div class="empty-icon">🏷</div>Connect to load active auctions</div>
+  </div>
+
+  <!-- Invoice Search -->
+  <div class="section-row" style="margin-top:8px;">
+    <span class="section-title">Invoice Search</span>
+  </div>
+
+  <div id="invoice-search">
+    <div class="tabs">
+      <div class="tab active" id="tab-auction"  onclick="switchTab('auction')">By Auction</div>
+      <div class="tab"        id="tab-customer" onclick="switchTab('customer')">By Customer</div>
+    </div>
+
+    <!-- By Auction -->
+    <div class="panel active" id="panel-auction">
+      <div class="search-row">
+        <div class="fld" style="max-width:460px;">
+          <label>Auction</label>
+          <select id="sel-auction"><option value="">— connect to load auctions —</option></select>
+        </div>
+        <div class="fld" style="max-width:160px;">
+          <label>Status</label>
+          <select id="sel-status">
+            <option value="">All</option>
+            <option value="OPEN">Open</option>
+            <option value="PENDING">Pending</option>
+            <option value="PAID">Paid</option>
+            <option value="SHIPPED">Shipped</option>
+            <option value="CANCELED">Canceled</option>
+          </select>
+        </div>
+        <button class="btn-primary" onclick="searchByAuction()" id="btn-auction-search" disabled>Load Invoices</button>
+      </div>
+      <div id="auction-results"></div>
+    </div>
+
+    <!-- By Customer -->
+    <div class="panel" id="panel-customer">
+      <div class="search-row">
+        <div class="fld" style="max-width:360px;">
+          <label>Email or Name</label>
+          <input type="text" id="cust-query" placeholder="customer@email.com or last name" />
+        </div>
+        <button class="btn-primary" onclick="searchCustomer()" id="btn-cust-search" disabled>Search</button>
+      </div>
+      <p class="search-hint">Email = exact match · Name = broad search</p>
+      <div id="user-results"></div>
+      <div id="cust-invoice-results"></div>
+    </div>
+  </div>
+
+</main>
+
+<script>
+  const API = 'https://bid.birdsnestauctions.com/api/graphql';
+  let IKEY = '';          // X-Integration-Key (always sent)
+  let BEARER = '';        // accessToken from createToken
+  let allAuctions = [];
+
+  // ── Restore saved credentials ──────────────────────────
+  (function restoreSession() {
+    const saved = localStorage.getItem('bna_creds');
+    if (saved) {
+      try {
+        const c = JSON.parse(saved);
+        document.getElementById('f-key').value  = c.key  || '';
+        document.getElementById('f-user').value = c.user || '';
+        document.getElementById('f-pass').value = c.pass || '';
+        document.getElementById('chk-save').checked = true;
+      } catch(e) {}
+    }
+    const bearer = sessionStorage.getItem('bna_bearer');
+    const ikey   = sessionStorage.getItem('bna_ikey');
+    if (bearer && ikey) {
+      BEARER = bearer; IKEY = ikey;
+      setConnected(true);
+      setNote('Session active.', 'ok');
+      loadAuctions();
+      populateAuctionDropdown();
+    }
+  })();
+
+  // ── Auth ───────────────────────────────────────────────
+  async function connect() {
+    const key  = document.getElementById('f-key').value.trim();
+    const user = document.getElementById('f-user').value.trim();
+    const pass = document.getElementById('f-pass').value;
+    if (!key || !user || !pass) { setNote('Please fill in all three fields.', 'err'); return; }
+
+    setNote('Connecting…', '');
+    document.getElementById('btn-connect').disabled = true;
+
+    const mutation = `mutation { auth { createToken(username: ${JSON.stringify(user)}, password: ${JSON.stringify(pass)}) { accessToken refreshToken } } }`;
+
+    try {
+      const res = await fetch(API, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-Integration-Key': key },
+        body: JSON.stringify({ query: mutation })
+      });
+      const json = await res.json();
+      const token = json?.data?.auth?.createToken?.accessToken;
+      if (!token) throw new Error(json?.errors?.[0]?.message || 'Authentication failed — check credentials');
+
+      IKEY = key; BEARER = token;
+      sessionStorage.setItem('bna_bearer', token);
+      sessionStorage.setItem('bna_ikey', key);
+
+      if (document.getElementById('chk-save').checked) {
+        localStorage.setItem('bna_creds', JSON.stringify({ key, user, pass }));
+      } else {
+        localStorage.removeItem('bna_creds');
+      }
+
+      setConnected(true);
+      setNote('Connected.', 'ok');
+      loadAuctions();
+      populateAuctionDropdown();
+    } catch(e) {
+      setConnected(false);
+      setNote(e.message, 'err');
+    } finally {
+      document.getElementById('btn-connect').disabled = false;
+    }
+  }
+
+  // ── GraphQL helper — sends BOTH headers ────────────────
+  async function gql(query, variables = {}) {
+    if (!BEARER) throw new Error('Not connected.');
+    const res = await fetch(API, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Integration-Key': IKEY,
+        'Authorization': `Bearer ${BEARER}`
+      },
+      body: JSON.stringify({ query, variables })
+    });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const data = await res.json();
+    if (data.errors?.length) throw new Error(data.errors[0].message);
+    return data.data;
+  }
+
+  // ── Active auctions ────────────────────────────────────
+  async function loadAuctions() {
+    const grid = document.getElementById('auctions-grid');
+    grid.innerHTML = '<div class="loading"><span class="spinner"></span> Loading auctions…</div>';
+    try {
+      const data = await gql(`{
+        auctions(limit: 50, filter: { auctionStatus: [STARTED] }) {
+          id
+          info { name saleNo auctionStatus }
+          lotCount
+        }
+      }`);
+      const auctions = data.auctions || [];
+      if (!auctions.length) {
+        grid.innerHTML = '<div class="empty"><div class="empty-icon">📭</div>No active auctions found.</div>';
+        document.getElementById('auctions-ts').textContent = 'Refreshed ' + timeNow();
+        return;
+      }
+      grid.innerHTML = auctions.map(a => `
+        <div class="auction-card">
+          <div class="card-bar"></div>
+          <div class="card-body">
+            <div class="card-name">${esc(a.info.name)}</div>
+            <div class="card-sale">Sale #${esc(a.info.saleNo)}</div>
+            <div class="card-stats">
+              <div class="card-stat">
+                <div class="stat-val">${a.lotCount ?? '—'}</div>
+                <div class="stat-lbl">Lots</div>
+              </div>
+              <div class="card-stat" id="si-${a.id}">
+                <div class="stat-val"><span class="skel" style="width:32px;height:24px;">&nbsp;</span></div>
+                <div class="stat-lbl">Invoices</div>
+              </div>
+              <div class="card-stat" id="st-${a.id}">
+                <div class="stat-val"><span class="skel" style="width:60px;height:24px;">&nbsp;</span></div>
+                <div class="stat-lbl">Gross Total</div>
+              </div>
+            </div>
+          </div>
+        </div>`).join('');
+      document.getElementById('auctions-ts').textContent = 'Refreshed ' + timeNow();
+      auctions.forEach(a => loadAuctionStats(a.id));
+    } catch(e) {
+      grid.innerHTML = `<div class="err-box">Failed to load auctions: ${esc(e.message)}</div>`;
+    }
+  }
+
+  async function loadAuctionStats(auctionId) {
+    try {
+      const data = await gql(`{
+        legacyInvoices(limit: 500, filter: { auctionId: [${parseInt(auctionId)}] }) {
+          id
+          totals { total }
+        }
+      }`);
+      const invs = data.legacyInvoices || [];
+      const total = invs.reduce((s, i) => s + (i.totals?.total || 0), 0);
+      const si = document.getElementById(`si-${auctionId}`);
+      const st = document.getElementById(`st-${auctionId}`);
+      if (si) si.innerHTML = `<div class="stat-val">${invs.length}</div><div class="stat-lbl">Invoices</div>`;
+      if (st) st.innerHTML = `<div class="stat-val">${money(total)}</div><div class="stat-lbl">Gross Total</div>`;
+    } catch(e) {
+      ['si','st'].forEach(p => {
+        const el = document.getElementById(`${p}-${auctionId}`);
+        if (el) el.innerHTML = `<div class="stat-val">—</div><div class="stat-lbl">${p==='si'?'Invoices':'Gross Total'}</div>`;
+      });
+    }
+  }
+
+  // ── Auction dropdown (all non-archived) ────────────────
+  async function populateAuctionDropdown() {
+    try {
+      const data = await gql(`{
+        auctions(limit: 100, filter: { auctionStatus: [STARTED, CLOSED, PAUSED] }) {
+          id
+          info { name saleNo auctionStatus }
+        }
+      }`);
+      const auctions = (data.auctions || []).sort((a,b) => parseInt(b.id) - parseInt(a.id));
+      const sel = document.getElementById('sel-auction');
+      sel.innerHTML = '<option value="">— select an auction —</option>' +
+        auctions.map(a => `<option value="${a.id}">${esc(a.info.name)} (Sale #${a.info.saleNo}) · ${a.info.auctionStatus}</option>`).join('');
+    } catch(e) { /* silently fail */ }
+  }
+
+  // ── Invoice search: by auction ─────────────────────────
+  async function searchByAuction() {
+    const auctionId = document.getElementById('sel-auction').value;
+    const status    = document.getElementById('sel-status').value;
+    const out       = document.getElementById('auction-results');
+    if (!auctionId) { out.innerHTML = '<p style="margin-top:12px;font-size:0.83rem;color:var(--ink-light)">Please select an auction.</p>'; return; }
+
+    out.innerHTML = '<div class="loading"><span class="spinner"></span> Loading invoices…</div>';
+    try {
+      const filterParts = [`auctionId: [${parseInt(auctionId)}]`];
+      if (status) filterParts.push(`status: ${status}`);
+
+      const data = await gql(`{
+        legacyInvoices(limit: 500, filter: { ${filterParts.join(', ')} }) {
+          id invoiceNo invoiceDate status
+          bidderUser { email userInfo { firstName lastName } }
+          billingInfo { firstName lastName email }
+          totals { hammerPrice buyerPremium total balanceDue }
+        }
+      }`);
+      renderInvoices(data.legacyInvoices || [], out);
+    } catch(e) {
+      out.innerHTML = `<div class="results-area"><div class="err-box">${esc(e.message)}</div></div>`;
+    }
+  }
+
+  // ── Invoice search: by customer ────────────────────────
+  async function searchCustomer() {
+    const q   = document.getElementById('cust-query').value.trim();
+    const urEl = document.getElementById('user-results');
+    const irEl = document.getElementById('cust-invoice-results');
+    if (!q) return;
+
+    urEl.innerHTML = '<div class="loading"><span class="spinner"></span> Searching…</div>';
+    urEl.style.display = 'block';
+    irEl.innerHTML = '';
+
+    try {
+      const isEmail = q.includes('@');
+      const filter  = isEmail ? `email: ${JSON.stringify(q)}` : `searchKey: ${JSON.stringify(q)}`;
+      const data = await gql(`{
+        users(limit: 20, filter: { ${filter} }) {
+          id email
+          userInfo { firstName lastName }
+        }
+      }`);
+      const users = data.users || [];
+      if (!users.length) {
+        urEl.innerHTML = '<div class="empty" style="padding:20px;">No customers found.</div>';
+        return;
+      }
+      urEl.innerHTML = `
+        <p style="font-size:0.76rem;color:var(--ink-light);margin-bottom:9px;">${users.length} result${users.length!==1?'s':''} — click to load invoices</p>
+        <div class="user-list">
+          ${users.map(u => {
+            const name = [u.userInfo?.firstName, u.userInfo?.lastName].filter(Boolean).join(' ') || '—';
+            return `<div class="user-item" onclick="loadCustomerInvoices(${u.id}, this)">
+              <div>
+                <div class="user-name">${esc(name)}</div>
+                <div class="user-email">${esc(u.email||'')}</div>
+              </div>
+              <div class="user-cta">View Invoices →</div>
+            </div>`;
+          }).join('')}
+        </div>`;
+    } catch(e) {
+      urEl.innerHTML = `<div class="err-box">${esc(e.message)}</div>`;
+    }
+  }
+
+  async function loadCustomerInvoices(userId, row) {
+    document.querySelectorAll('.user-item').forEach(el => el.classList.remove('sel'));
+    row.classList.add('sel');
+    const irEl = document.getElementById('cust-invoice-results');
+    irEl.innerHTML = '<div class="loading"><span class="spinner"></span> Loading…</div>';
+    try {
+      const data = await gql(`{
+        legacyInvoices(limit: 200, filter: { bidderUserId: ${parseInt(userId)} }) {
+          id invoiceNo invoiceDate status
+          bidderUser { email userInfo { firstName lastName } }
+          billingInfo { firstName lastName email }
+          totals { hammerPrice buyerPremium total balanceDue }
+        }
+      }`);
+      renderInvoices(data.legacyInvoices || [], irEl);
+    } catch(e) {
+      irEl.innerHTML = `<div class="results-area"><div class="err-box">${esc(e.message)}</div></div>`;
+    }
+  }
+
+  // ── Render invoice table ───────────────────────────────
+  function renderInvoices(invoices, container) {
+    if (!invoices.length) {
+      container.innerHTML = '<div class="results-area"><div class="empty" style="padding:20px;">No invoices found.</div></div>';
+      return;
+    }
+    const grandTotal = invoices.reduce((s,i) => s + (i.totals?.total || 0), 0);
+    const grandBal   = invoices.reduce((s,i) => s + (i.totals?.balanceDue || 0), 0);
+
+    container.innerHTML = `
+      <div class="results-area">
+        <div class="results-hdr">
+          <span class="results-count">${invoices.length} invoice${invoices.length!==1?'s':''}</span>
+          <div style="display:flex;gap:8px;flex-wrap:wrap;">
+            <span class="chip">Total ${money(grandTotal)}</span>
+            ${grandBal > 0 ? `<span class="chip red">Balance Due ${money(grandBal)}</span>` : ''}
+          </div>
+        </div>
+        <div class="tbl-wrap">
+          <table>
+            <thead><tr>
+              <th>Invoice #</th><th>Date</th><th>Customer</th>
+              <th>Status</th><th style="text-align:right">Hammer</th>
+              <th style="text-align:right">Total</th><th style="text-align:right">Balance Due</th>
+            </tr></thead>
+            <tbody>
+              ${invoices.map(inv => {
+                const fname = inv.bidderUser?.userInfo?.firstName || inv.billingInfo?.firstName || '';
+                const lname = inv.bidderUser?.userInfo?.lastName  || inv.billingInfo?.lastName  || '';
+                const name  = [fname, lname].filter(Boolean).join(' ') || '—';
+                const email = inv.bidderUser?.email || inv.billingInfo?.email || '';
+                const bal   = inv.totals?.balanceDue ?? 0;
+                return `<tr>
+                  <td class="td-inv">#${inv.invoiceNo}</td>
+                  <td class="td-date">${fmtDate(inv.invoiceDate)}</td>
+                  <td><div class="td-name">${esc(name)}</div><div class="td-sub">${esc(email)}</div></td>
+                  <td><span class="badge b-${inv.status}">${inv.status}</span></td>
+                  <td class="td-amt">${money(inv.totals?.hammerPrice || 0)}</td>
+                  <td class="td-amt">${money(inv.totals?.total || 0)}</td>
+                  <td class="td-bal ${bal===0?'zero':''}">${bal===0 ? '✓ Paid' : money(bal)}</td>
+                </tr>`;
+              }).join('')}
+            </tbody>
+          </table>
+        </div>
+      </div>`;
+  }
+
+  // ── Tabs ───────────────────────────────────────────────
+  function switchTab(name) {
+    ['auction','customer'].forEach(t => {
+      document.getElementById('tab-'+t).classList.toggle('active', t===name);
+      document.getElementById('panel-'+t).classList.toggle('active', t===name);
+    });
+  }
+
+  function toggleSetup() {
+    const p = document.getElementById('setup-panel');
+    p.style.display = p.style.display === 'none' ? 'block' : p.style.display === '' ? 'none' : 'block';
+  }
+
+  // ── UI helpers ─────────────────────────────────────────
+  function setConnected(yes) {
+    document.getElementById('conn-dot').className = 'conn-dot ' + (yes ? 'ok' : 'err');
+    document.getElementById('btn-refresh').disabled = !yes;
+    document.getElementById('btn-auction-search').disabled = !yes;
+    document.getElementById('btn-cust-search').disabled = !yes;
+  }
+  function setNote(msg, type) {
+    const el = document.getElementById('setup-note');
+    el.textContent = msg; el.className = type;
+  }
+  function money(n) {
+    if (n == null || isNaN(n)) return '—';
+    return '$' + Number(n).toLocaleString('en-US', { minimumFractionDigits:2, maximumFractionDigits:2 });
+  }
+  function fmtDate(d) {
+    if (!d) return '—';
+    try { return new Date(d).toLocaleDateString('en-US', { month:'short', day:'numeric', year:'numeric' }); }
+    catch { return d; }
+  }
+  function timeNow() {
+    return new Date().toLocaleTimeString('en-US', { hour:'numeric', minute:'2-digit' });
+  }
+  function esc(s) {
+    return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  }
+
+  // ── Keyboard shortcuts ─────────────────────────────────
+  ['f-key','f-user','f-pass'].forEach(id => {
+    document.getElementById(id).addEventListener('keydown', e => { if (e.key==='Enter') connect(); });
+  });
+  document.getElementById('cust-query').addEventListener('keydown', e => { if (e.key==='Enter') searchCustomer(); });
+</script>
+</body>
+</html>
