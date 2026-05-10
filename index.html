@@ -336,16 +336,16 @@
     try {
       const res = await fetch(API, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'X-Integration-Key': key },
+        headers: { 'Content-Type': 'application/json', 'X-Integration-Key': IKEY },
         body: JSON.stringify({ query: mutation })
       });
       const json = await res.json();
       const token = json?.data?.auth?.createToken?.accessToken;
       if (!token) throw new Error(json?.errors?.[0]?.message || 'Authentication failed — check credentials');
 
-      IKEY = key; BEARER = token;
+      BEARER = token;
       sessionStorage.setItem('bna_bearer', token);
-      sessionStorage.setItem('bna_ikey', key);
+      
 
       if (document.getElementById('chk-save').checked) {
         localStorage.setItem('bna_creds', JSON.stringify({ user, pass }));
