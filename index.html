@@ -194,6 +194,11 @@
     @keyframes spin { to { transform: rotate(360deg); } }
     .loading { text-align: center; padding: 28px; color: var(--ink-light); font-size: 0.85rem; }
 
+    .status-toggle { display:flex; border:1px solid var(--border); border-radius:var(--radius-sm); overflow:hidden; }
+    .stoggle { background:none; border:none; padding:5px 14px; font-size:0.78rem; font-family:'DM Sans',sans-serif; color:var(--ink-mid); cursor:pointer; transition:background 0.15s,color 0.15s; }
+    .stoggle:hover { background:var(--teal-pale); }
+    .stoggle.active { background:var(--teal); color:var(--white); font-weight:500; }
+
     @media (max-width: 600px) { main { padding: 16px 12px 48px; } header { padding: 0 14px; } }
   </style>
 </head>
@@ -228,17 +233,21 @@
     <p id="setup-note"></p>
   </div>
 
-  <!-- Active Auctions -->
+  <!-- Auctions -->
   <div class="section-row">
-    <span class="section-title">Active Auctions</span>
-    <div style="display:flex;align-items:center;gap:12px;">
+    <span class="section-title" id="auctions-title">Active Auctions</span>
+    <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
       <span class="section-meta" id="auctions-ts"></span>
-      <button class="btn-ghost" id="btn-refresh" onclick="loadAuctions()" disabled>↻ Refresh</button>
+      <div class="status-toggle">
+        <button class="stoggle active" id="tog-started" onclick="switchAuctionStatus('STARTED')">Active</button>
+        <button class="stoggle" id="tog-closed" onclick="switchAuctionStatus('CLOSED')">Closed</button>
+      </div>
+      <button class="btn-ghost" id="btn-refresh" onclick="loadAuctions()" disabled>&#8635; Refresh</button>
     </div>
   </div>
 
   <div id="auctions-grid">
-    <div class="empty"><div class="empty-icon">🏷</div>Connect to load active auctions</div>
+    <div class="empty"><div class="empty-icon">&#127991;</div>Connect to load active auctions</div>
   </div>
 
   <!-- Invoice Search -->
@@ -384,12 +393,21 @@
   }
 
   // ── Active auctions ────────────────────────────────────
+  function switchAuctionStatus(status) {
+    currentAuctionStatus = status;
+    document.getElementById('tog-started').classList.toggle('active', status === 'STARTED');
+    document.getElementById('tog-closed').classList.toggle('active', status === 'CLOSED');
+    document.getElementById('auctions-title').textContent = status === 'STARTED' ? 'Active Auctions' : 'Closed Auctions';
+    loadAuctions();
+  }
+
   async function loadAuctions() {
     const grid = document.getElementById('auctions-grid');
+    const label = currentAuctionStatus === 'STARTED' ? 'active' : 'closed';
     grid.innerHTML = '<div class="loading"><span class="spinner"></span> Loading auctions…</div>';
     try {
       const data = await gql(`{
-        auctions(limit: 50, filter: { auctionStatus: [STARTED] }) {
+        auctions(limit: 50, filter: { auctionStatus: [${currentAuctionStatus}] }) {
           id
           info { name saleNo auctionStatus }
           lotCount
@@ -397,10 +415,11 @@
       }`);
       const auctions = data.auctions || [];
       if (!auctions.length) {
-        grid.innerHTML = '<div class="empty"><div class="empty-icon">📭</div>No active auctions found.</div>';
+        grid.innerHTML = `<div class="empty"><div class="empty-icon">📭</div>No ${label} auctions found.</div>`;
         document.getElementById('auctions-ts').textContent = 'Refreshed ' + timeNow();
         return;
       }
+      const isActive = currentAuctionStatus === 'STARTED';
       grid.innerHTML = auctions.map(a => `
         <div class="auction-card">
           <div class="card-bar"></div>
@@ -412,44 +431,72 @@
                 <div class="stat-val">${a.lotCount ?? '—'}</div>
                 <div class="stat-lbl">Lots</div>
               </div>
-              <div class="card-stat" id="si-${a.id}">
-                <div class="stat-val"><span class="skel" style="width:32px;height:24px;">&nbsp;</span></div>
-                <div class="stat-lbl">Invoices</div>
-              </div>
-              <div class="card-stat" id="st-${a.id}">
+              <div class="card-stat" id="s1-${a.id}">
                 <div class="stat-val"><span class="skel" style="width:60px;height:24px;">&nbsp;</span></div>
-                <div class="stat-lbl">Gross Total</div>
+                <div class="stat-lbl">${isActive ? 'Current Bids' : 'Hammer Total'}</div>
+              </div>
+              <div class="card-stat" id="s2-${a.id}">
+                <div class="stat-val"><span class="skel" style="width:60px;height:24px;">&nbsp;</span></div>
+                <div class="stat-lbl">${isActive ? 'Invoice Total' : 'Gross Total'}</div>
               </div>
             </div>
           </div>
         </div>`).join('');
       document.getElementById('auctions-ts').textContent = 'Refreshed ' + timeNow();
-      auctions.forEach(a => loadAuctionStats(a.id));
+      auctions.forEach(a => loadAuctionStats(a.id, isActive));
     } catch(e) {
       grid.innerHTML = `<div class="err-box">Failed to load auctions: ${esc(e.message)}</div>`;
     }
   }
 
-  async function loadAuctionStats(auctionId) {
+  async function loadAuctionStats(auctionId, isActive) {
+    const id = parseInt(auctionId);
     try {
-      const data = await gql(`{
-        legacyInvoices(limit: 500, filter: { auctionId: [${parseInt(auctionId)}] }) {
-          id
-          totals { total }
-        }
-      }`);
-      const invs = data.legacyInvoices || [];
-      const total = invs.reduce((s, i) => s + (i.totals?.total || 0), 0);
-      const si = document.getElementById(`si-${auctionId}`);
-      const st = document.getElementById(`st-${auctionId}`);
-      if (si) si.innerHTML = `<div class="stat-val">${invs.length}</div><div class="stat-lbl">Invoices</div>`;
-      if (st) st.innerHTML = `<div class="stat-val">${money(total)}</div><div class="stat-lbl">Gross Total</div>`;
+      if (isActive) {
+        // Sum currentBid across all lots for active auctions
+        const lotData = await gql(`{
+          auctionLots(limit: 500, filter: { auctionId: ${id} }) {
+            ... on TimedAuctionLot {
+              biddingState { currentBid }
+            }
+          }
+        }`);
+        const lots = lotData.auctionLots || [];
+        const currentBidTotal = lots.reduce((s, l) => s + (l.biddingState?.currentBid || 0), 0);
+
+        // Also fetch invoice total
+        const invData = await gql(`{
+          legacyInvoices(limit: 500, filter: { auctionId: [${id}] }) {
+            totals { total }
+          }
+        }`);
+        const invTotal = (invData.legacyInvoices || []).reduce((s,i) => s + (i.totals?.total||0), 0);
+
+        setCardStat(`s1-${auctionId}`, money(currentBidTotal), 'Current Bids');
+        setCardStat(`s2-${auctionId}`, money(invTotal), 'Invoice Total');
+      } else {
+        // Closed: show hammer total and gross total from invoices
+        const invData = await gql(`{
+          legacyInvoices(limit: 500, filter: { auctionId: [${id}] }) {
+            totals { hammerPrice total }
+          }
+        }`);
+        const invs = invData.legacyInvoices || [];
+        const hammer = invs.reduce((s,i) => s + (i.totals?.hammerPrice||0), 0);
+        const gross  = invs.reduce((s,i) => s + (i.totals?.total||0), 0);
+
+        setCardStat(`s1-${auctionId}`, money(hammer), 'Hammer Total');
+        setCardStat(`s2-${auctionId}`, money(gross), 'Gross Total');
+      }
     } catch(e) {
-      ['si','st'].forEach(p => {
-        const el = document.getElementById(`${p}-${auctionId}`);
-        if (el) el.innerHTML = `<div class="stat-val">—</div><div class="stat-lbl">${p==='si'?'Invoices':'Gross Total'}</div>`;
-      });
+      setCardStat(`s1-${auctionId}`, '—', isActive ? 'Current Bids' : 'Hammer Total');
+      setCardStat(`s2-${auctionId}`, '—', isActive ? 'Invoice Total' : 'Gross Total');
     }
+  }
+
+  function setCardStat(id, val, lbl) {
+    const el = document.getElementById(id);
+    if (el) el.innerHTML = `<div class="stat-val">${val}</div><div class="stat-lbl">${lbl}</div>`;
   }
 
   // ── Auction dropdown (all non-archived) ────────────────
@@ -579,7 +626,7 @@
         <div class="tbl-wrap">
           <table>
             <thead><tr>
-              <th>Invoice #</th><th>Date</th><th>Customer</th>
+              <th>Invoice #</th><th>Date</th><th>Customer</th><th>Auction</th>
               <th>Status</th><th style="text-align:right">Hammer</th>
               <th style="text-align:right">Total</th><th style="text-align:right">Balance Due</th>
             </tr></thead>
@@ -590,10 +637,13 @@
                 const name  = [fname, lname].filter(Boolean).join(' ') || '—';
                 const email = inv.bidderUser?.email || inv.billingInfo?.email || '';
                 const bal   = inv.totals?.balanceDue ?? 0;
+                const auctionName = inv.lineItems?.[0]?.auctionInfo?.name || '—';
+                const saleNo = inv.lineItems?.[0]?.auctionInfo?.saleNo || '';
                 return `<tr>
                   <td class="td-inv">#${inv.invoiceNo}</td>
                   <td class="td-date">${fmtDate(inv.invoiceDate)}</td>
                   <td><div class="td-name">${esc(name)}</div><div class="td-sub">${esc(email)}</div></td>
+                  <td><div class="td-name" style="font-size:0.8rem">${esc(auctionName)}</div>${saleNo ? '<div class=\"td-sub\">Sale #'+esc(saleNo)+'</div>' : ''}</td>
                   <td><span class="badge b-${inv.status}">${inv.status}</span></td>
                   <td class="td-amt">${money(inv.totals?.hammerPrice || 0)}</td>
                   <td class="td-amt">${money(inv.totals?.total || 0)}</td>
