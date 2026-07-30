@@ -598,6 +598,7 @@
           id invoiceNo invoiceDate status
           bidderUser { email userInfo { firstName lastName } }
           billingInfo { firstName lastName email }
+          lineItems { auctionInfo { auction { info { name saleNo } } } }
           totals { hammerPrice buyerPremium total balanceDue }
         }
       }`);
@@ -620,7 +621,7 @@
 
     try {
       const isEmail = q.includes('@');
-      const filter  = isEmail ? `email: ${JSON.stringify(q)}` : `searchKey: ${JSON.stringify(q)}`;
+      const filter  = isEmail ? `email: { contain: ${JSON.stringify(q)} }` : `searchKey: ${JSON.stringify(q)}`;
       const data = await gql(`{
         users(limit: 20, filter: { ${filter} }) {
           id email
@@ -658,10 +659,11 @@
     irEl.innerHTML = '<div class="loading"><span class="spinner"></span> Loading…</div>';
     try {
       const data = await gql(`{
-        legacyInvoices(limit: 200, filter: { bidderUserId: ${parseInt(userId)} }) {
+        legacyInvoices(limit: 200, filter: { bidderUserId: [${parseInt(userId)}] }) {
           id invoiceNo invoiceDate status
           bidderUser { email userInfo { firstName lastName } }
           billingInfo { firstName lastName email }
+          lineItems { auctionInfo { auction { info { name saleNo } } } }
           totals { hammerPrice buyerPremium total balanceDue }
         }
       }`);
@@ -703,8 +705,8 @@
                 const name  = [fname, lname].filter(Boolean).join(' ') || '—';
                 const email = inv.bidderUser?.email || inv.billingInfo?.email || '';
                 const bal   = inv.totals?.balanceDue ?? 0;
-                const auctionName = inv.lineItems?.[0]?.auctionInfo?.name || '—';
-                const saleNo = inv.lineItems?.[0]?.auctionInfo?.saleNo || '';
+                const auctionName = inv.lineItems?.[0]?.auctionInfo?.auction?.info?.name || '—';
+                const saleNo = inv.lineItems?.[0]?.auctionInfo?.auction?.info?.saleNo || '';
                 return `<tr style="cursor:pointer" onclick="openInvoice(${inv.id}, ${JSON.stringify(inv.invoiceNo)}, ${JSON.stringify(inv.status)})">
                   <td class="td-inv">#${inv.invoiceNo}</td>
                   <td class="td-date">${fmtDate(inv.invoiceDate)}</td>
@@ -801,7 +803,7 @@
           }
           lineItems {
             lotName hammerPrice buyerPremium subtotal
-            auctionInfo { name saleNo }
+            auctionInfo { auction { info { name saleNo } } }
           }
           payments { method amount paidOn note }
           totals {
