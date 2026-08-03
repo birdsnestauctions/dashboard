@@ -594,7 +594,7 @@
       if (status) filterParts.push(`status: ${status}`);
 
       const data = await gql(`{
-        legacyInvoices(limit: 500, filter: { ${filterParts.join(', ')} }) {
+        legacyInvoices(limit: 500, filter: { ${filterParts.join(', ')} }, sort: { invoiceDate: DESC }) {
           id invoiceNo invoiceDate status
           bidderUser { email userInfo { firstName lastName } }
           billingInfo { firstName lastName email }
@@ -659,7 +659,7 @@
     irEl.innerHTML = '<div class="loading"><span class="spinner"></span> Loading…</div>';
     try {
       const data = await gql(`{
-        legacyInvoices(limit: 200, filter: { bidderUserId: [${parseInt(userId)}] }) {
+        legacyInvoices(limit: 200, filter: { bidderUserId: [${parseInt(userId)}] }, sort: { invoiceDate: DESC }) {
           id invoiceNo invoiceDate status
           bidderUser { email userInfo { firstName lastName } }
           billingInfo { firstName lastName email }
@@ -679,6 +679,7 @@
       container.innerHTML = '<div class="results-area"><div class="empty" style="padding:20px;">No invoices found.</div></div>';
       return;
     }
+    invoices = [...invoices].sort((a,b) => new Date(b.invoiceDate) - new Date(a.invoiceDate));
     const grandTotal = invoices.reduce((s,i) => s + (i.totals?.total || 0), 0);
     const grandBal   = invoices.reduce((s,i) => s + (i.totals?.balanceDue || 0), 0);
 
