@@ -707,7 +707,7 @@
                 const bal   = inv.totals?.balanceDue ?? 0;
                 const auctionName = inv.lineItems?.[0]?.auctionInfo?.auction?.info?.name || '—';
                 const saleNo = inv.lineItems?.[0]?.auctionInfo?.auction?.info?.saleNo || '';
-                return `<tr style="cursor:pointer" onclick="openInvoice(${inv.id}, ${JSON.stringify(inv.invoiceNo)}, ${JSON.stringify(inv.status)})">
+                return `<tr style="cursor:pointer" class="inv-row" data-id="${inv.id}" data-invno="${esc(inv.invoiceNo)}" data-status="${esc(inv.status)}">
                   <td class="td-inv">#${inv.invoiceNo}</td>
                   <td class="td-date">${fmtDate(inv.invoiceDate)}</td>
                   <td><div class="td-name">${esc(name)}</div><div class="td-sub">${esc(email)}</div></td>
@@ -722,6 +722,12 @@
           </table>
         </div>
       </div>`;
+
+    container.querySelectorAll('.inv-row').forEach(row => {
+      row.addEventListener('click', () => {
+        openInvoice(row.dataset.id, row.dataset.invno, row.dataset.status);
+      });
+    });
   }
 
   // ── Tabs ───────────────────────────────────────────────
