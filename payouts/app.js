@@ -194,7 +194,9 @@
   let persistTimer = null;
   function persistSummary() {
     clearTimeout(persistTimer);
+    const cur = S; // keep this sale even if the page changes before the save runs
     persistTimer = setTimeout(async () => {
+      const S = cur;
       const sale = S.data.Sales[0], r = S.result;
       const want = { soldTotal: r.soldTotal, estPayout: r.payoutTotal, checks: r.checks, openCount: r.openCount };
       const changed = Object.keys(want).some(k => String(sale[k]) !== String(want[k]));
@@ -456,8 +458,8 @@
     calc.push(`<tr><td>General lots, ${gen.length} sold</td><td>${money(b.general)}</td></tr>`);
     if (staff) calc.push(`<tr><td>Your share at 100%</td><td>${money(b.generalShare)}</td></tr>`);
     else if (isEst) {
-      calc.push(`<tr><td>Your share at 50% (first $10,000 of sales)</td><td>${money(b.tierLow * 0.5)}</td></tr>`);
-      if (b.tierHigh > 0) calc.push(`<tr><td>Your share at 65% (sales above $10,000)</td><td>${money(b.tierHigh * 0.65)}</td></tr>`);
+      calc.push(`<tr><td>Your share at 50%${b.tierHigh > 0 ? ` on ${money(b.tierLow)}` : ''} (sales up to $10,000)</td><td>${money(b.tierLow * 0.5)}</td></tr>`);
+      if (b.tierHigh > 0) calc.push(`<tr><td>Your share at 65% on ${money(b.tierHigh)} (sales above $10,000)</td><td>${money(b.tierHigh * 0.65)}</td></tr>`);
     } else calc.push(`<tr><td>Your share at 50%</td><td>${money(b.generalShare)}</td></tr>`);
     if (gs.length) calc.push(`<tr><td>Gold &amp; sterling lots, ${gs.length} sold, ${money(b.gs)} · paid at ${staff ? '100' : '65'}%</td><td>${money(b.gsShare)}</td></tr>`);
     calc.push(`<tr class="sub"><td>Subtotal before fees</td><td>${money(b.share)}</td></tr>`);
@@ -489,7 +491,7 @@
             <div class="bal"><div class="label">Balance due to you</div><div class="big">${money(p.payout)}</div>
               <p style="margin:8px 0 0;font-size:13px;color:#5d6b67">${lots.length} lots sold · ${money(b.general + b.gs)} in total sales</p></div>
             <div><h2>How your payout was calculated</h2><table class="calc">${calc.join('')}</table>
-              <p class="note2">${staff ? 'Staff consignments are paid at 100%.' : isEst ? 'Sales above $10,000 pay 65% to you. Gold and sterling pay 65% from the first dollar.' : 'Gold and sterling pay 65% from the first dollar.'}</p></div>
+              <p class="note2">${staff ? 'Staff consignments are paid at 100%.' : isEst ? 'Sales above $10,000 pay 65% to you. Gold and sterling pay 65% from the first dollar and count toward the $10,000.' : 'Gold and sterling pay 65% from the first dollar.'}</p></div>
           </section>
           ${internal ? `<section class="int"><h2 style="margin:0 0 8px;color:#8a4b12">Refunds &amp; adjustments (internal only)</h2>
             ${adjRows ? `<table class="ledger"><thead><tr><th>Lot</th><th>Item</th><th>Change</th><th>Payout</th></tr></thead><tbody>${adjRows}</tbody></table>` : '<p style="margin:0">No refunds or adjustments on these lots.</p>'}

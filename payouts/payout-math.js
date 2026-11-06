@@ -1,7 +1,8 @@
 // Bird's Nest Auctions payout math. Works in the browser (window.PayoutMath) and in Node (require).
 //
 // Rules (confirmed with Katie):
-//   Estate sale:   client gets 50% of the first $10,000 of general sales, 65% above that (marginal).
+//   Estate sale:   client gets 50% of general sales up to the $10,000 mark, 65% above it (marginal).
+//                  Gold & Silver sales count toward the $10,000 mark first.
 //   Consignment:   client gets 50% of general sales, no tiers.
 //   Gold & Silver: client gets 65% from the first dollar, both sale types.
 //   Staff:         100%.   BNA house items: 0%.
@@ -147,7 +148,9 @@
         p.gsShare = r2(p.gs * 0.65);
         if (sale.type === 'consignment') p.generalShare = r2(p.general * 0.5);
         else {
-          const low = Math.min(p.general, TIER_LIMIT), high = Math.max(0, p.general - TIER_LIMIT);
+          // Gold & Silver counts toward the $10,000 threshold but is always paid at 65% on its own line.
+          const room = Math.max(0, TIER_LIMIT - p.gs);
+          const low = Math.min(p.general, room), high = Math.max(0, p.general - room);
           p.generalShare = r2(low * 0.5 + high * 0.65);
           p.tierLow = r2(low); p.tierHigh = r2(high);
         }
