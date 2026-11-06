@@ -6,6 +6,10 @@
 //   Consignment:   client gets 50% of general sales, no tiers.
 //   Gold & Silver: client gets 65% from the first dollar, both sale types.
 //   Staff:         100%.   BNA house items: 0%.
+//   Vehicles/equipment: 90% to the client plus a $250 listing fee per vehicle, sold or not.
+//   Every class counts toward the estate $10,000 mark; special classes are paid on their own lines.
+//   Fees (contract): sorting $800/day; item removal $150 (10-19), $300 (20-29), $500 (30+);
+//   reserve item 10% of the minimum, max $250, only if unsold; access/schedule $250 each.
 //   Fees are deducted from the payee's share.
 //   Full refund:   client paid on the original price if "client paid" is on, otherwise nothing.
 //   Partial:       client paid on the reduced price unless "pay on original" is on.
@@ -66,11 +70,31 @@
     return init || 'UNASSIGNED';
   }
 
-  function isGS(lot) {
-    if (lot.gsOverride === 'yes') return true;
-    if (lot.gsOverride === 'no') return false;
-    return lot.category === GS_CATEGORY;
+  // Lot rate classes. lotRate: '' (automatic), 'gs', 'general', 'vehicle', or a number = client's percent.
+  // Older rows used gsOverride yes/no; those still work.
+  function lotClass(lot) {
+    const r = String(lot.lotRate == null ? '' : lot.lotRate).trim();
+    if (r === 'gs' || r === 'general' || r === 'vehicle') return r;
+    if (r !== '' && !isNaN(Number(r))) return 'custom';
+    if (lot.gsOverride === 'yes') return 'gs';
+    if (lot.gsOverride === 'no') return 'general';
+    return lot.category === GS_CATEGORY ? 'gs' : 'general';
   }
+  function customRate(lot) { return Math.max(0, Math.min(100, Number(lot.lotRate))) / 100; }
+  function isGS(lot) { return lotClass(lot) === 'gs'; }
+  const CLASS_RATE = { gs: 0.65, vehicle: 0.90 };
+  const CLASS_NAME = { general: 'General', gs: 'Gold & Silver', vehicle: 'Vehicle or equipment', custom: 'Special rate' };
+
+  // Contract fees
+  const FEES = {
+    sort:     { name: 'Sorting fee', unit: 800, qtyLabel: 'days' },
+    removal:  { name: 'Item removal fee', qtyLabel: 'items removed' },
+    reserve:  { name: 'Reserve item fee' },
+    access:   { name: 'Access/schedule fee', unit: 250, qtyLabel: 'missed appointments' },
+    cancel:   { name: 'Cancellation fee' },
+    other:    { name: 'Other fee' },
+  };
+  function removalFee(n) { return n >= 30 ? 500 : n >= 20 ? 300 : n >= 10 ? 150 : 0; }
 
   // The price the payout is calculated on, plus the adjustment that set it.
   function effectiveLot(lot, adjByLot) {
@@ -78,10 +102,7 @@
     const sold = String(lot.status).toUpperCase() === 'SOLD';
     const current = sold ? (num(lot.price) || 0) : 0;
     if (!adj) return { price: current, adj: null, counted: sold };
-    if (adj.status !== 'classified') {
-      // Not decided yet: estimate on what BidPath shows now, but block close-out.
-      return { price: current, adj, counted: sold, pending: true };
-    }
+    if (adj.status !== 'classified') return { price: current, adj, counted: sold, pending: true };
     const paid = clientPaid(adj);
     const orig = num(adj.origPrice) || 0, now = num(adj.newPrice) || 0;
     if (adj.kind === 'partial') return { price: paid ? orig : now, adj, counted: true };
@@ -97,26 +118,28 @@
   function compute(data) {
     const sale = data.sale || {};
     const lots = data.lots || [];
-    const fees = data.fees || [];
+    const feeRows = data.fees || [];
     const adjs = (data.adjustments || []).filter(a => a.status !== 'void');
     const payeeRows = data.payees || [];
+    const closed = sale.bidpathStatus ? sale.bidpathStatus === 'CLOSED' : lots.length > 0;
 
     const adjByLot = {};
     adjs.forEach(a => { adjByLot[String(a.lotNo)] = a; });
+    const lotByNo = {};
+    lots.forEach(l => { lotByNo[String(l.lotNo)] = l; });
 
     const payees = {};
     const ensure = key => {
       if (!payees[key]) {
         const row = payeeRows.find(p => String(p.payeeKey) === key) || {};
-        const isHouse = key === 'BNA';
         payees[key] = {
           key, row,
           name: key === 'CLIENT' ? (sale.clientName || row.name || 'Client') : (row.name || key),
           email: key === 'CLIENT' ? (sale.clientEmail || row.email || '') : (row.email || (key.includes('@') ? key : '')),
-          rate: row.rate || (isHouse ? 'house' : 'client'),
-          lots: [], general: 0, gs: 0, generalShare: 0, gsShare: 0, share: 0,
-          fees: [], feeTotal: 0, adjustments: [], adjustmentEffect: 0, payout: 0,
-          soldCount: 0,
+          rate: row.rate || (key === 'BNA' ? 'house' : 'client'),
+          lots: [], general: 0, gs: 0, vehicle: 0, custom: 0, customShare: 0, vehicleLots: [],
+          generalShare: 0, gsShare: 0, vehicleShare: 0, share: 0,
+          fees: [], feeTotal: 0, adjustments: [], payout: 0, soldCount: 0, removed: 0,
         };
       }
       return payees[key];
@@ -124,57 +147,76 @@
     if (sale.type !== 'consignment') ensure('CLIENT');
     payeeRows.forEach(p => p.payeeKey && ensure(String(p.payeeKey)));
 
-    // Lots
     lots.forEach(lot => {
-      const key = payeeKeyFor(sale, lot);
-      const p = ensure(key);
+      const p = ensure(payeeKeyFor(sale, lot));
       const eff = effectiveLot(lot, adjByLot);
-      const gs = isGS(lot);
-      const line = { lot, price: r2(eff.price), gs, adj: eff.adj, pending: !!eff.pending, counted: eff.counted };
+      const cls = lotClass(lot);
+      const line = { lot, price: r2(eff.price), cls, gs: cls === 'gs', adj: eff.adj, pending: !!eff.pending, counted: eff.counted };
       p.lots.push(line);
       if (eff.counted) p.soldCount++;
-      if (gs) p.gs += eff.price; else p.general += eff.price;
+      if (cls === 'gs') p.gs += eff.price;
+      else if (cls === 'vehicle') { p.vehicle += eff.price; p.vehicleLots.push(lot); }
+      else if (cls === 'custom') { p.custom += eff.price; p.customShare += eff.price * customRate(lot); }
+      else p.general += eff.price;
       if (eff.adj) p.adjustments.push(eff.adj);
     });
 
-    // Shares
     Object.values(payees).forEach(p => {
       const rate = rateFor(p);
       p.rate = rate;
-      p.general = r2(p.general); p.gs = r2(p.gs);
-      if (rate === 'house') { p.generalShare = 0; p.gsShare = 0; }
-      else if (rate === 'staff') { p.generalShare = p.general; p.gsShare = p.gs; }
+      ['general', 'gs', 'vehicle', 'custom', 'customShare'].forEach(k => { p[k] = r2(p[k]); });
+      p.special = r2(p.gs + p.vehicle + p.custom);
+      if (rate === 'house') { p.generalShare = p.gsShare = p.vehicleShare = p.customShare = 0; }
+      else if (rate === 'staff') { p.generalShare = p.general; p.gsShare = p.gs; p.vehicleShare = p.vehicle; p.customShare = p.custom; }
       else {
-        p.gsShare = r2(p.gs * 0.65);
+        p.gsShare = r2(p.gs * CLASS_RATE.gs);
+        p.vehicleShare = r2(p.vehicle * CLASS_RATE.vehicle);
         if (sale.type === 'consignment') p.generalShare = r2(p.general * 0.5);
         else {
-          // Gold & Silver counts toward the $10,000 threshold but is always paid at 65% on its own line.
-          const room = Math.max(0, TIER_LIMIT - p.gs);
+          // Every sold item counts toward the $10,000 mark. Special-rate items are paid on their own lines,
+          // so they use up the 50% band first and more of the general sales reach 65%.
+          const room = Math.max(0, TIER_LIMIT - p.special);
           const low = Math.min(p.general, room), high = Math.max(0, p.general - room);
           p.generalShare = r2(low * 0.5 + high * 0.65);
           p.tierLow = r2(low); p.tierHigh = r2(high);
         }
       }
-      p.share = r2(p.generalShare + p.gsShare);
-      // What this payee would have earned with no adjustments, to show the effect on the internal view.
+      p.share = r2(p.generalShare + p.gsShare + p.vehicleShare + p.customShare);
       let off = 0;
-      p.lots.forEach(l => {
-        if (l.adj && !l.pending) off += (num(l.adj.origPrice) || 0) - l.price;
-      });
-      p.adjustedOff = r2(off);   // sale-price dollars taken off this payee's lots by refunds
+      p.lots.forEach(l => { if (l.adj && !l.pending) off += (num(l.adj.origPrice) || 0) - l.price; });
+      p.adjustedOff = r2(off);
     });
 
-    // Fees
-    fees.forEach(f => {
+    // Fees: each stored row becomes a fee line; removal counts are totalled into one tiered fee.
+    const pending = [];
+    feeRows.forEach(f => {
       const key = f.payeeKey ? String(f.payeeKey) : (sale.type === 'consignment' ? 'UNASSIGNED' : 'CLIENT');
       const p = ensure(key);
-      p.fees.push(f);
-      p.feeTotal = r2(p.feeTotal + (num(f.amount) || 0));
+      const kind = FEES[f.kind] ? f.kind : 'other';
+      const qty = num(f.qty) || 0;
+      if (kind === 'removal') { p.removed += qty; return; }
+      let amount, label = f.label || FEES[kind].name, detail = '';
+      if (kind === 'sort') { amount = qty * 800; detail = `${qty} day${qty === 1 ? '' : 's'} × $800`; }
+      else if (kind === 'access') { amount = qty * 250; detail = `${qty} missed appointment${qty === 1 ? '' : 's'} × $250`; }
+      else if (kind === 'reserve') {
+        const lot = lotByNo[String(f.lotNo)];
+        const min = num(f.minimum) || 0;
+        const what = `Lot ${f.lotNo}${f.itemName || (lot && lot.name) ? ` ${f.itemName || lot.name}` : ''}, minimum ${money(min)}`;
+        if (!lot || !closed) { pending.push({ payee: key, text: `Reserve on ${what}: fee applies only if it doesn’t sell` }); amount = 0; detail = `${what}, waiting for the sale to close`; }
+        else if (String(lot.status).toUpperCase() === 'SOLD') { amount = 0; detail = `${what}, sold, no fee`; }
+        else { amount = r2(Math.min(min * 0.10, 250)); detail = `${what}, did not sell`; }
+      } else amount = num(f.amount) || 0;
+      p.fees.push({ row: f, kind, label, detail, amount: r2(amount), note: f.note || '' });
     });
-
     Object.values(payees).forEach(p => {
-      p.payout = r2(p.share - p.feeTotal);
-      if (p.rate === 'house') p.payout = 0;
+      if (p.removed > 0) {
+        const fee = removalFee(p.removed);
+        p.fees.push({ kind: 'removal', label: FEES.removal.name, detail: `${p.removed} item${p.removed === 1 ? '' : 's'} removed${fee ? '' : ', under 10 so no fee'}`, amount: fee, auto: true });
+      }
+      p.vehicleLots.forEach(l => p.fees.push({ kind: 'vehicleListing', label: 'Vehicle listing fee', detail: `Lot ${l.lotNo} ${l.name || ''}`.trim(), amount: 250, auto: true }));
+      p.fees = p.fees.filter(f => f.amount > 0 || f.detail);
+      p.feeTotal = r2(p.fees.reduce((s, f) => s + f.amount, 0));
+      p.payout = p.rate === 'house' ? 0 : r2(p.share - p.feeTotal);
     });
 
     const list = Object.values(payees)
@@ -182,19 +224,19 @@
       .sort((a, b) => (a.key === 'BNA') - (b.key === 'BNA') || a.name.localeCompare(b.name));
 
     const flags = buildFlags(sale, lots, list, adjs);
-    const soldTotal = r2(list.reduce((s, p) => s + p.general + p.gs, 0));
+    const soldTotal = r2(list.reduce((s, p) => s + p.general + p.special, 0));
     const payoutTotal = r2(list.reduce((s, p) => s + Math.max(0, p.payout), 0));
+    const feeTotal = r2(list.reduce((s, p) => s + p.feeTotal, 0));
     const checks = list.filter(p => p.rate !== 'house' && p.payout > 0).length;
-    return { payees: list, flags, soldTotal, payoutTotal, checks, openCount: flags.filter(f => f.blocking).length };
+    return { payees: list, flags, pending, soldTotal, payoutTotal, feeTotal, checks, closed, openCount: flags.filter(f => f.blocking).length };
   }
 
-  // "Sterling" or "925" anywhere counts (even in a mixed silverplate lot), except the coffee brand.
-  // Karat marks count unless the item is plated or filled.
+  // Gold & Silver per the contract: sterling, 10K/12K/14K/18K gold including gold-filled. Plated items are excluded.
   const STERLING = /\bsterling\b(?!\s+(mocha|coffee))|\b925\b/i;
-  const KARAT = /\b(10|14|18|22|24)\s?(k|kt|karat|carat)\b/i;
-  const PLATED = /plated|gold[- ]filled|\bgf\b/i;
-  const METAL = { test: s => STERLING.test(s) || (KARAT.test(s) && !PLATED.test(s)) };
-  const NOT_METAL = { test: () => false };
+  const KARAT = /\b(10|12|14|18|22|24)\s?(k|kt|karat|carat)\b|gold[- ]filled|\bgf\b/i;
+  const PLATED = /\bplated\b|\bplate\b|silverplate/i;
+  const METAL = { test: s => STERLING.test(s) || (KARAT.test(s) && !(PLATED.test(s) && !/gold[- ]filled/i.test(s))) };
+  const VEHICLE = /\b(car|truck|boat|tractor|trailer|motorcycle|atv|snowmobile|jeep|mower|camper|rv|forklift|excavator|vehicle)\b/i;
 
   function buildFlags(sale, lots, payees, adjs) {
     const flags = [];
@@ -222,11 +264,19 @@
     });
     // Possible gold or sterling filed elsewhere.
     lots.forEach(l => {
-      if (l.gsOverride || l.category === GS_CATEGORY) return;
+      if (l.gsOverride || l.lotRate || l.category === GS_CATEGORY) return;
       if (String(l.status).toUpperCase() !== 'SOLD') return;
-      if (METAL.test(l.name || '') && !NOT_METAL.test(l.name || '')) {
+      if (METAL.test(l.name || '')) {
         flags.push({ kind: 'metal', blocking: true, lotNo: l.lotNo,
           text: `Lot ${l.lotNo} mentions gold or sterling but is filed under ${l.category || 'no category'}` });
+      }
+    });
+    // Possible vehicle or equipment (90% to the client plus a $250 listing fee) not marked yet.
+    lots.forEach(l => {
+      if (l.lotRate || l.gsOverride) return;
+      if ((num(l.closePrice) || num(l.price) || 0) >= 500 && VEHICLE.test(`${l.name || ''} ${l.category || ''}`)) {
+        flags.push({ kind: 'vehicle', blocking: true, lotNo: l.lotNo,
+          text: `Lot ${l.lotNo} may be a vehicle or equipment, which pays 90% plus a $250 listing fee` });
       }
     });
     return flags;
@@ -269,6 +319,6 @@
     return '';
   }
 
-  return { compute, REASONS, GROUPS, HIGH_VALUE, defaultClientPaid, clientPaid, adjAmount, payeeKeyFor, isGS,
+  return { compute, REASONS, GROUPS, HIGH_VALUE, FEES, CLASS_NAME, removalFee, lotClass, defaultClientPaid, clientPaid, adjAmount, payeeKeyFor, isGS,
     money, dueDates, parseRefundNotes, suggestReason, r2, truthy };
 });
