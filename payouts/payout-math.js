@@ -37,8 +37,9 @@
     goodwill:    { g: 'other',  name: 'Buyer goodwill', paid: true },
     billing:     { g: 'other',  name: 'Billing correction (lot not affected)', paid: true },
     other:       { g: 'other',  name: 'Other reason', paid: true, describe: true },
+    unpaid:      { g: 'unpaid', name: 'Buyer never paid, invoice canceled', paid: false },
   };
-  const GROUPS = { ours: 'Bird’s Nest error', client: 'Client error', item: 'Item issue', other: 'Other' };
+  const GROUPS = { ours: 'Bird’s Nest error', client: 'Client error', item: 'Item issue', other: 'Other', unpaid: 'Never paid (not a refund)' };
 
   const r2 = n => Math.round((Number(n) || 0) * 100) / 100;
   const num = v => (v === '' || v == null ? null : Number(v));
@@ -244,7 +245,7 @@
       kind: 'refund', blocking: true, lotNo: a.lotNo,
       text: `Lot ${a.lotNo}: ${a.kind === 'partial' ? 'price lowered' : 'refunded in full'}, needs a reason`,
     }));
-    adjs.filter(a => a.status === 'classified' && adjAmount(a) >= HIGH_VALUE && !truthy(a.highValueOk)).forEach(a => flags.push({
+    adjs.filter(a => a.status === 'classified' && a.reason !== 'unpaid' && adjAmount(a) >= HIGH_VALUE && !truthy(a.highValueOk)).forEach(a => flags.push({
       kind: 'highValue', blocking: true, lotNo: a.lotNo,
       text: `Lot ${a.lotNo}: ${money(adjAmount(a))} refund, confirm who gets paid`,
     }));
@@ -307,6 +308,7 @@
   // Suggest a reason from the words in a refund note.
   function suggestReason(note) {
     const t = String(note || '').toLowerCase();
+    if (/cancel+ed invoice|invoice cancel|never paid|didn.t pay|did not pay|non-?pay|unpaid/.test(t)) return 'unpaid';
     if (/duplicate/.test(t)) return 'dup';
     if (/ship|transit|arrived/.test(t)) return 'ship';
     if (/pack|wrap/.test(t)) return 'pack';

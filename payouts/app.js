@@ -632,9 +632,9 @@
     const label = { wait: 'Waiting for a reason', ...M.GROUPS };
     app.innerHTML = nav() + `<div class="wrap">
       <div class="head"><div><h1>Refunds</h1><div class="sub">Every refund the portal has found, with the reason and whether the client was paid.</div></div></div>
-      ${open.length ? `<section class="panel"><h2>Waiting for a reason (${open.length})</h2><p class="meta">Their sales can’t close out until each one has a reason.</p><div class="flags">${open.map(a => refundEditor(a, 'refunds')).join('')}</div></section>` : ''}
+      ${open.length ? `<section class="panel"><h2>Waiting for a reason (${open.length})</h2><p class="meta">Their sales can’t close out until each one has a reason. If the buyer never paid and the invoice was canceled, choose “Buyer never paid, invoice canceled.” With invoice access, the portal does this on its own.</p><div class="flags">${open.map(a => refundEditor(a, 'refunds')).join('')}</div></section>` : ''}
       <section class="stats">
-        <div class="stat"><div class="label">Refunded to buyers</div><div class="v">${money(adjs.reduce((s, a) => s + M.adjAmount(a), 0))}</div><div class="n">${adjs.length} refunds</div></div>
+        <div class="stat"><div class="label">Refunded to buyers</div><div class="v">${money(adjs.filter(a => grp(a) !== 'unpaid').reduce((s, a) => s + M.adjAmount(a), 0))}</div><div class="n">${adjs.filter(a => grp(a) !== 'unpaid').length} refunds · never-paid lots not included</div></div>
         ${Object.keys(M.GROUPS).map(g => `<div class="stat" style="border-top:4px solid var(--${g})"><div class="label">${M.GROUPS[g]}</div><div class="v">${money(sum(g))}</div><div class="n">${cnt(g)} refund${cnt(g) === 1 ? '' : 's'}</div></div>`).join('')}
       </section>
       <section class="two">
@@ -709,7 +709,7 @@
     if (act === 'print') return window.print();
     if (act === 'sync') {
       const b = t.closest('button'); b.disabled = true; b.textContent = 'Pulling from BidPath…';
-      try { const id = S.id; const r = await api('/sync', { auctionId: id }); S = null; await loadSale(id); toast(`Pulled ${r.synced} lots${r.newRefunds ? `, found ${r.newRefunds} refund${r.newRefunds === 1 ? '' : 's'} to review` : ''}.`); rerender(); }
+      try { const id = S.id; const r = await api('/sync', { auctionId: id }); S = null; await loadSale(id); toast(`Pulled ${r.synced} lots${r.newRefunds ? `, found ${r.newRefunds} refund${r.newRefunds === 1 ? '' : 's'} to review` : ''}${r.neverPaid ? `, ${r.neverPaid} lot${r.neverPaid === 1 ? '' : 's'} on canceled invoices` : ''}.`); rerender(); }
       catch (err) { toast(err.message, true); b.disabled = false; b.textContent = 'Refresh from BidPath'; }
       return;
     }
